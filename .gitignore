@@ -1,0 +1,46 @@
+# === ENVIRONMENT / SECRETS ===
+.env
+.env.*
+.*.env
+*.secret
+*.enc
+*.key
+
+# === EXAMPLE FILES (safe to commit) ===
+!*.env.example
+
+# === LOG FILES ===
+*.log
+*.out
+*.bak
+
+# === EDITOR FILES ===
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# === DOCKER ===
+*.pid
+docker-compose.override.yml
+.docker/
+
+# === PYTHON (if using helper scripts) ===
+__pycache__/
+*.py[cod]
+*.pyo
+
+# === NODE (for frontends or utilities) ===
+node_modules/
+dist/
+
+# === KUBERNETES / HELM ===
+*.tgz
+.kube/
+.helm/
+
+# === SYSTEM FILES ===
+.DS_Store
+Thumbs.db
+
