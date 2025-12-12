@@ -1,0 +1,47 @@
+#!/bin/bash
+
+source .env
+API_URL=$API_URL
+CF_ACCESS_CLIENT_ID=$CF_ACCESS_CLIENT_ID
+CF_ACCESS_CLIENT_SECRET=$CF_ACCESS_CLIENT_SECRET
+
+ACCESS=$(curl -sS "$API_URL/api/session" \
+ -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+ -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
+
+if [[ "$ACCESS" == *'"authenticated":true'* ]]; then
+
+    names=$(curl -sS "$API_URL/api/wireguard/client" \
+        -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+        -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" )
+    
+    ordered_nums=$(
+    echo "$names" \
+    | jq -r '.[].name
+            | select(startswith("Worker-"))
+            | sub("Worker-";"")
+            | tonumber' \
+    | sort -n \
+    )
+    echo $ordered_nums
+    
+    new_num=1
+
+    for x in $ordered_nums; do
+        if [ "$x" -eq "$new_num" ]; then
+            new_num=$((new_num + 1))
+        fi
+    done
+
+    new_name="Worker-$new_num"
+    echo "New Worker: $new_name"
+
+    curl -X POST "$API_URL/api/wireguard/client" \
+        -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+        -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"$new_name\"}"
+
+else 
+    echo "Not Authenticated. | Message: $ACCESS" 
+fi
