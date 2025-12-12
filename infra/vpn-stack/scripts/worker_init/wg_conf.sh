@@ -1,9 +1,12 @@
 #!/bin/bash
+set -euo pipefail
 
 source .env
 API_URL=$API_URL
 CF_ACCESS_CLIENT_ID=$CF_ACCESS_CLIENT_ID
 CF_ACCESS_CLIENT_SECRET=$CF_ACCESS_CLIENT_SECRET
+
+WG_DIRECTORY="/etc/wireguard"
 
 ACCESS=$(curl -sS "$API_URL/api/session" \
  -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \

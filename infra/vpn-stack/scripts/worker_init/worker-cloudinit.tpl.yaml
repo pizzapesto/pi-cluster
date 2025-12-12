@@ -1,0 +1,126 @@
+#cloud-config
+hostname: temp-name
+
+package_update: true
+package_upgrade: true
+packages:
+  - wireguard
+  - curl
+  - jq
+  - ca-certificates
+  - gpg
+  - apt-transport-https
+  - containerd
+
+write_files:
+  - path: /etc/modules-load.d/k8s.conf
+    permissions: "0644"
+    content: |
+      overlay
+      br_netfilter
+
+  - path: /etc/sysctl.d/k8s.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+
+  - path: /usr/local/sbin/register-wireguard-and-configure.sh
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      API_URL="{{ API_URL }}"
+      CF_ACCESS_CLIENT_ID="{{ CF_ACCESS_CLIENT_ID }}"
+      CF_ACCESS_CLIENT_SECRET="{{ CF_ACCESS_CLIENT_SECRET }}"
+
+      WG_DIR="/etc/wireguard"
+      mkdir -p "${WG_DIR}"
+      cd "${WG_DIR}"
+
+      ACCESS=$(curl -sS "$API_URL/api/session" \
+      -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+      -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
+
+      if [[ "$ACCESS" == *'"authenticated":true'* ]]; then
+
+          names=$(curl -sS "$API_URL/api/wireguard/client" \
+              -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+              -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" )
+          
+          ordered_nums=$(
+          echo "$names" \
+          | jq -r '.[].name
+                  | select(startswith("Worker-"))
+                  | sub("Worker-";"")
+                  | tonumber' \
+          | sort -n \
+          )
+          
+          new_num=1
+
+          for x in $ordered_nums; do
+              if [ "$x" -eq "$new_num" ]; then
+                  new_num=$((new_num + 1))
+              fi
+          done
+
+          new_name="Worker-$new_num"
+
+          if [ -n "${new_name}" ] && [ "${new_name}" != "null" ]; then
+            hostnamectl set-hostname "${new_name}"
+          fi
+
+          curl -sS -X POST "$API_URL/api/wireguard/client" \
+              -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+              -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"$new_name\"}" \
+              > /dev/null
+
+          names=$(curl -sS "$API_URL/api/wireguard/client" \
+              -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+              -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" )
+
+          worker_id=$(echo $names | jq -r --arg n "$new_name" '.[] | select(.name == $n) | .id')    
+          
+          config=$(curl -sS "$API_URL/api/wireguard/client/$worker_id/configuration" \
+              -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+              -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}")
+          echo "$config" > wg0.conf
+      else 
+          echo "Not Authenticated. | Message: $ACCESS" 
+      fi
+
+      chmod 600 wg0.conf
+      echo "$(hostname)" > /var/tmp/final-hostname
+
+runcmd:
+  - [ bash, -c, "swapoff -a" ]
+  - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
+
+  - [ bash, -c, "modprobe overlay && modprobe br_netfilter" ]
+  - [ bash, -c, "sysctl --system" ]
+
+  - [ bash, -c, "/usr/local/sbin/register-wireguard-and-configure.sh" ]
+  - [ bash, -c, "systemctl enable wg-quick@wg0 && systemctl start wg-quick@wg0" ]
+
+  - [ bash, -c, "mkdir -p /etc/containerd && containerd config default > /etc/containerd/config.toml" ]
+  - [ bash, -c, "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml" ]
+  - [ bash, -c, "systemctl enable --now containerd" ]
+
+  - [ bash, -c, "mkdir -p -m 755 /etc/apt/keyrings" ]
+  - [ bash, -c, "curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{ K8S_MINOR }}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg" ]
+  - [ bash, -c, "echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ K8S_MINOR }}/deb/ /' > /etc/apt/sources.list.d/kubernetes.list" ]
+  - [ bash, -c, "apt-get update && apt-get install -y kubelet kubeadm kubectl" ]
+  - [ bash, -c, "apt-mark hold kubelet kubeadm kubectl" ]
+  - [ bash, -c, "systemctl enable --now kubelet" ]
+
+  - |
+    FINAL_HOSTNAME=$(cat /var/tmp/final-hostname 2>/dev/null || hostname)
+    kubeadm join {{ CONTROLPLANE_ENDPOINT }} \
+      --token {{ KUBEADM_TOKEN }} \
+      --discovery-token-ca-cert-hash {{ DISCOVERY_TOKEN_CA_CERT_HASH }}
