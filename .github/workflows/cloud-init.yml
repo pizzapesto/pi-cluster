@@ -1,0 +1,79 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-template:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download code
+      uses: actions/checkout@v5
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        
+    - name: Install tools
+      run: |
+        pip install jinja2 pyyaml
+        
+    - name: Render cloud-init from template (using dummy values)
+        env:
+          API_URL: "https://wg.example.com"
+          CF_ACCESS_CLIENT_ID: "ci-id"
+          CF_ACCESS_CLIENT_SECRET: "ci-secret"
+          K8S_MINOR: "1.34"
+          CONTROLPLANE_IP: "10.8.0.1"
+          CONTROLPLANE_ENDPOINT: "10.8.0.1:6443"
+          KUBEADM_TOKEN: "abcdef.0123456789abcdef"
+          DISCOVERY_TOKEN_CA_CERT_HASH: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        run: |
+          python cloudinit/render.py cloudinit/worker.tpl.yaml cloudinit/worker.rendered.yaml
+
+      - name: Validate YAML structure
+        run: |
+          python - << 'PY'
+          import yaml
+          from pathlib import Path
+
+          p = Path("cloudinit/worker.rendered.yaml")
+          data = yaml.safe_load(p.read_text())
+
+          assert isinstance(data, dict)
+          assert "write_files" in data, "write_files missing"
+          assert "runcmd" in data, "runcmd missing"
+
+          # Comprueba que el script existe dentro de write_files
+          wf = data["write_files"]
+          paths = [x.get("path") for x in wf if isinstance(x, dict)]
+          assert "/usr/local/sbin/register-wireguard-and-configure.sh" in paths, "bootstrap script missing"
+
+          print("YAML OK + required keys present")
+          PY
+
+      - name: Extract embedded bash script
+        run: |
+          python - << 'PY'
+          import yaml
+          from pathlib import Path
+
+          data = yaml.safe_load(Path("cloudinit/worker.rendered.yaml").read_text())
+          script = None
+          for item in data.get("write_files", []):
+            if item.get("path") == "/usr/local/sbin/register-wireguard-and-configure.sh":
+              script = item.get("content")
+              break
+          if not script:
+            raise SystemExit("Script not found in write_files")
+
+          Path("cloudinit/bootstrap.sh").write_text(script)
+          print("Extracted cloudinit/bootstrap.sh")
+          PY
+
+      - name: ShellCheck bootstrap script
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: cloudinit
+
+    
