@@ -37,7 +37,7 @@ jobs:
         import yaml
         from pathlib import Path
 
-        p = Path("cloudinit/worker.rendered.yaml")
+        p = Path("infra/vpn-stack/scripts/worker_init/worker-cloudinit.rendered.yaml")
         data = yaml.safe_load(p.read_text())
 
         assert isinstance(data, dict)
@@ -58,7 +58,7 @@ jobs:
         import yaml
         from pathlib import Path
 
-        data = yaml.safe_load(Path("cloudinit/worker.rendered.yaml").read_text())
+        data = yaml.safe_load(Path("infra/vpn-stack/scripts/worker_init/worker-cloudinit.rendered.yaml").read_text())
         script = None
         for item in data.get("write_files", []):
           if item.get("path") == "/usr/local/sbin/register-wireguard-and-configure.sh":
@@ -67,8 +67,8 @@ jobs:
         if not script:
           raise SystemExit("Script not found in write_files")
 
-        Path("cloudinit/bootstrap.sh").write_text(script)
-        print("Extracted cloudinit/bootstrap.sh")
+        Path("infra/vpn-stack/scripts/worker_init/bootstrap.sh").write_text(script)
+        print("Extracted infra/vpn-stack/scripts/worker_init/bootstrap.sh")
         PY
 
     - name: ShellCheck bootstrap script
