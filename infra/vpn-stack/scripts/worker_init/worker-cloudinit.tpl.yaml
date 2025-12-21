@@ -121,6 +121,15 @@ write_files:
       echo "$(hostname)" > /var/tmp/final-hostname
 
 runcmd:
+  - [ bash, -c, "systemctl disable --now systemd-resolved" ]
+  - [ bash, -c, "rm -f /etc/resolv.conf" ]
+  - [ bash, -c, "printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf" ]
+  - |
+      for i in {1..30}; do
+        ping -c1 8.8.8.8 && break
+        sleep 2
+      done
+      
   - [ bash, -c, "swapoff -a" ]
   - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
 
