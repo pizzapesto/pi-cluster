@@ -1,6 +1,16 @@
 #cloud-config
 hostname: temp-name
 
+users:
+  - default
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$/80eJl9p8rHgkpdR$c82gPZBF86Z2ClJWwZxfWQHj6JSIEjhvilpnGnbyt0SnJ4qfxIfUMg1s6UqLKu1LFOTMDXlXC0rwNQlk/SVn31"
+ssh_pwauth: true
+disable_root: true
+
 package_update: true
 package_upgrade: true
 packages:
