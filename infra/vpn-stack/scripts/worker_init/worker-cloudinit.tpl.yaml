@@ -27,6 +27,14 @@ packages:
   - containerd
 
 write_files:
+  - path: /etc/ssh/sshd_config.d/99-local.conf
+    permissions: "0644"
+    content: |
+      UsePAM yes
+      PasswordAuthentication yes
+      KbdInteractiveAuthentication yes
+      PermitRootLogin no
+
   - path: /etc/modules-load.d/k8s.conf
     permissions: "0644"
     content: |
@@ -121,6 +129,10 @@ runcmd:
 
   - [ bash, -c, "/usr/local/sbin/register-wireguard-and-configure.sh" ]
   - [ bash, -c, "systemctl enable wg-quick@wg0 && systemctl start wg-quick@wg0" ]
+
+  - [ bash, -c, "ssh-keygen -A" ]
+  - [ bash, -c, "systemctl enable --now ssh || systemctl enable --now sshd" ]
+  - [ bash, -c, "systemctl restart ssh || systemctl restart sshd" ]
 
   - [ bash, -c, "mkdir -p /etc/containerd && containerd config default > /etc/containerd/config.toml" ]
   - [ bash, -c, "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml" ]
