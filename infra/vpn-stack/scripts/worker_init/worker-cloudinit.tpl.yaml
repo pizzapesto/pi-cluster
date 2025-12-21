@@ -122,18 +122,30 @@ write_files:
 
 runcmd:
   - |
+      # Wait for wlan0 to exist (never fail)
       for i in {1..30}; do
-        ip link show wlan0 | grep -q "state UP" && break
+        ip link show wlan0 >/dev/null 2>&1 && break
         sleep 2
       done
-
-  - [ bash, -c, "systemctl restart systemd-resolved" ]
+      true
 
   - |
+      # Wait for wlan0 to be UP (never fail)
       for i in {1..30}; do
-        ping -c1 8.8.8.8 && break
+        ip link show wlan0 2>/dev/null | grep -q "state UP" && break
         sleep 2
       done
+      true
+
+  - [ bash, -c, "systemctl restart systemd-resolved || true" ]
+
+  - |
+      # Wait for connectivity (never fail)
+      for i in {1..30}; do
+        ping -c1 -W1 8.8.8.8 >/dev/null 2>&1 && break
+        sleep 2
+      done
+      true
 
   - [ bash, -c, "swapoff -a" ]
   - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
