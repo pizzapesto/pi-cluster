@@ -27,13 +27,13 @@ packages:
   - containerd
 
 write_files:
-  - path: /etc/ssh/sshd_config.d/99-local.conf
+  - path: /etc/systemd/resolved.conf.d/99-dns.conf
     permissions: "0644"
     content: |
-      UsePAM yes
-      PasswordAuthentication yes
-      KbdInteractiveAuthentication yes
-      PermitRootLogin no
+      [Resolve]
+      DNS=8.8.8.8 1.1.1.1
+      FallbackDNS=8.8.4.4 1.0.0.1
+      DNSStubListener=yes
 
   - path: /etc/modules-load.d/k8s.conf
     permissions: "0644"
@@ -121,15 +121,20 @@ write_files:
       echo "$(hostname)" > /var/tmp/final-hostname
 
 runcmd:
-  - [ bash, -c, "systemctl disable --now systemd-resolved" ]
-  - [ bash, -c, "rm -f /etc/resolv.conf" ]
-  - [ bash, -c, "printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf" ]
+  - |
+      for i in {1..30}; do
+        ip link show wlan0 | grep -q "state UP" && break
+        sleep 2
+      done
+
+  - [ bash, -c, "systemctl restart systemd-resolved" ]
+
   - |
       for i in {1..30}; do
         ping -c1 8.8.8.8 && break
         sleep 2
       done
-      
+
   - [ bash, -c, "swapoff -a" ]
   - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
 
