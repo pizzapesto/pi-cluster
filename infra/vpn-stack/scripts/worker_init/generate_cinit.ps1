@@ -17,7 +17,7 @@ try {
     }
   }
 
-  python render.py worker-cloudinit.tpl.yaml user-data.yaml
+  python render.py worker-cloudinit.tpl.yaml user-data
   if ($LASTEXITCODE -ne 0) {
     throw "render.py failed with exit code $LASTEXITCODE"
   }
