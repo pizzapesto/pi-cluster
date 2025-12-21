@@ -27,14 +27,6 @@ packages:
   - containerd
 
 write_files:
-  - path: /etc/systemd/resolved.conf.d/99-dns.conf
-    permissions: "0644"
-    content: |
-      [Resolve]
-      DNS=8.8.8.8 1.1.1.1
-      FallbackDNS=8.8.4.4 1.0.0.1
-      DNSStubListener=yes
-
   - path: /etc/modules-load.d/k8s.conf
     permissions: "0644"
     content: |
@@ -121,9 +113,6 @@ write_files:
       echo "$(hostname)" > /var/tmp/final-hostname
 
 runcmd:
-
-  - [ bash, -c, "systemctl restart systemd-resolved || true" ]
-
   - [ bash, -c, "swapoff -a" ]
   - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
 
