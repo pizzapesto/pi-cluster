@@ -1,5 +1,10 @@
 #cloud-config
-hostname: temp-name
+preserve_hostname: true
+
+locale: en_US.UTF-8
+
+keyboard:
+  layout: es
 
 users:
   - name: marc
@@ -11,9 +16,8 @@ ssh_pwauth: true
 disable_root: true
 
 package_update: true
-package_upgrade: true
+package_upgrade: false
 packages:
-  - openssh-server
   - wireguard
   - curl
   - jq
@@ -109,8 +113,6 @@ write_files:
       echo "$(hostname)" > /var/tmp/final-hostname
 
 runcmd:
-  - [ bash, -c, "systemctl enable ssh"]
-  - [ bash, -c, "systemctl restart ssh"]
   - [ bash, -c, "swapoff -a" ]
   - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
 
