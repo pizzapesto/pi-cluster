@@ -15,7 +15,7 @@ users:
 ssh_pwauth: true
 disable_root: true
 
-package_update: true
+package_update: false
 package_upgrade: false
 packages:
   - wireguard
@@ -112,7 +112,22 @@ write_files:
       chmod 600 wg0.conf
       echo "$(hostname)" > /var/tmp/final-hostname
 
+bootcmd:
+  - |
+      # Ensure resolv.conf has usable DNS early (Multipass/Hyper-V can lag)
+      printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" > /etc/resolv.conf
+
 runcmd:
+  - |
+      # Wait until DNS works (not just link up)
+      for i in {1..60}; do
+        getent hosts archive.ubuntu.com >/dev/null 2>&1 && getent hosts pkgs.k8s.io >/dev/null 2>&1 && break
+        sleep 2
+      done
+  - |
+      printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" > /etc/resolv.conf
+
+      
   - [ bash, -c, "swapoff -a" ]
   - [ bash, -c, "sed -i.bak '/\\sswap\\s/ s/^/#/' /etc/fstab" ]
 
@@ -120,17 +135,13 @@ runcmd:
   - [ bash, -c, "sysctl --system" ]
 
   - [ bash, -c, "/usr/local/sbin/register-wireguard-and-configure.sh" ]
-  - [ bash, -c, "systemctl enable wg-quick@wg0 && systemctl start wg-quick@wg0" ]
-
-  - [ bash, -c, "ssh-keygen -A" ]
-  - [ bash, -c, "systemctl enable --now ssh || systemctl enable --now sshd" ]
-  - [ bash, -c, "systemctl restart ssh || systemctl restart sshd" ]
+  - [ bash, -c, "systemctl enable --now wg-quick@wg0" ]
 
   - [ bash, -c, "mkdir -p /etc/containerd && containerd config default > /etc/containerd/config.toml" ]
   - [ bash, -c, "sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml" ]
   - [ bash, -c, "systemctl enable --now containerd" ]
 
-  - [ bash, -c, "mkdir -p -m 755 /etc/apt/keyrings" ]
+  - [ bash, -c, "apt-get install -y apt-transport-https ca-certificates curl gpg" ]
   - [ bash, -c, "curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{ K8S_MINOR }}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg" ]
   - [ bash, -c, "echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ K8S_MINOR }}/deb/ /' > /etc/apt/sources.list.d/kubernetes.list" ]
   - [ bash, -c, "apt-get update && apt-get install -y kubelet kubeadm kubectl" ]
@@ -138,7 +149,6 @@ runcmd:
   - [ bash, -c, "systemctl enable --now kubelet" ]
 
   - |
-    FINAL_HOSTNAME=$(cat /var/tmp/final-hostname 2>/dev/null || hostname)
     kubeadm join {{ CONTROLPLANE_ENDPOINT }} \
       --token {{ KUBEADM_TOKEN }} \
       --discovery-token-ca-cert-hash {{ DISCOVERY_TOKEN_CA_CERT_HASH }}
