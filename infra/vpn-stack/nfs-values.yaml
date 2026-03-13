@@ -1,0 +1,10 @@
+nfs:
+  server: 10.8.0.10              # NFS IP
+  path: /mnt/k8s-data/nfs         # Mounted folder
+
+storageClass:
+  name: nfs-shared
+  defaultClass: true
+  reclaimPolicy: Delete
+  allowVolumeExpansion: true
+  accessModes: ReadWriteMany

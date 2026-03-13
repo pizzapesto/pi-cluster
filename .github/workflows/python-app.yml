@@ -36,3 +36,14 @@ jobs:
     - name: Test with pytest
       run: |
         pytest -v
+    - name: Set up Docker buildx
+      uses: docker/setup-buildx-action@v4
+    - name: Docker build
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: testing/Dockerfile
+        push: false
+        tags: pi-cluster:${{github.sha}}
+        cache-from: type-gha
+        cache-to: type=gha, mode=max
